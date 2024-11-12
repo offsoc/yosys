@@ -415,7 +415,7 @@ endif
 ifeq ($(ENABLE_PLUGINS),1)
 CXXFLAGS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) $(PKG_CONFIG) --silence-errors --cflags libffi) -DYOSYS_ENABLE_PLUGINS
 ifeq ($(OS), MINGW)
-CXXFLAGS += -Ilibs/dlfcn-win32
+CXXFLAGS += -Ilibs/dlfcn-win32/src
 endif
 LIBS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) $(PKG_CONFIG) --silence-errors --libs libffi || echo -lffi)
 ifneq ($(OS), $(filter $(OS),FreeBSD OpenBSD NetBSD MINGW))
@@ -648,7 +648,7 @@ OBJS += kernel/fstdata.o
 endif
 ifeq ($(ENABLE_PLUGINS),1)
 ifeq ($(OS), MINGW)
-OBJS += libs/dlfcn-win32/dlfcn.o
+OBJS += libs/dlfcn-win32/src/dlfcn.o
 endif
 endif
 
@@ -754,6 +754,10 @@ else
 	$(P) $(CXX) -o libyosys.so -shared -Wl,-soname,$(LIBDIR)/libyosys.so $(LINKFLAGS) $^ $(LIBS) $(LIBS_VERIFIC)
 endif
 
+%.o: %.c
+	$(Q) mkdir -p $(dir $@)
+	$(P) $(CC) -o $@ -c $<
+
 %.o: %.cc
 	$(Q) mkdir -p $(dir $@)
 	$(P) $(CXX) -o $@ -c $(CPPFLAGS) $(CXXFLAGS) $<
@@ -788,7 +792,7 @@ LIBS_NOVERIFIC = $(LIBS)
 endif
 
 $(PROGRAM_PREFIX)yosys-config: misc/yosys-config.in $(YOSYS_SRC)/Makefile
-	$(P) $(SED) -e 's#@CXXFLAGS@#$(subst -Ilibs/dlfcn-win32,,$(subst -I. -I"$(YOSYS_SRC)",-I"$(DATDIR)/include",$(strip $(CXXFLAGS_NOVERIFIC))))#;' \
+	$(P) $(SED) -e 's#@CXXFLAGS@#$(subst -Ilibs/dlfcn-win32/src,,$(subst -I. -I"$(YOSYS_SRC)",-I"$(DATDIR)/include",$(strip $(CXXFLAGS_NOVERIFIC))))#;' \
 			-e 's#@CXX@#$(strip $(CXX))#;' -e 's#@LINKFLAGS@#$(strip $(LINKFLAGS) $(PLUGIN_LINKFLAGS))#;' -e 's#@LIBS@#$(strip $(LIBS_NOVERIFIC) $(PLUGIN_LIBS))#;' \
 			-e 's#@BINDIR@#$(strip $(BINDIR))#;' -e 's#@DATDIR@#$(strip $(DATDIR))#;' < $< > $(PROGRAM_PREFIX)yosys-config
 	$(Q) chmod +x $(PROGRAM_PREFIX)yosys-config
