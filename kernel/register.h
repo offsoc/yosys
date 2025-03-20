@@ -40,8 +40,10 @@ struct PassUsageBlock {
 struct Pass
 {
 	std::string pass_name, short_help;
+	const vector<std::string> doc_string;
 	const vector<PassUsageBlock> pass_usages;
 	Pass(std::string name, std::string short_help = "** document me **",
+		const vector<std::string> doc_string = {},
 		const vector<PassUsageBlock> usages = {});
 	virtual ~Pass();
 
@@ -59,6 +61,10 @@ struct Pass
 
 	bool HasUsages() {
 		return !pass_usages.empty();
+	}
+
+	bool HasDocstring() {
+		return !doc_string.empty();
 	}
 
 	struct pre_post_exec_state_t {
