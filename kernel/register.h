@@ -58,8 +58,10 @@ struct Pass
 		source_location location = source_location::current());
 	virtual ~Pass();
 
+	// Makes calls to log() to generate help message
 	virtual void help();
-	virtual bool help_v2();
+	// Uses PrettyHelp::get_current() to produce a more portable formatted help message
+	virtual bool formatted_help();
 	virtual void clear_flags();
 	virtual void execute(std::vector<std::string> args, RTLIL::Design *design) = 0;
 
