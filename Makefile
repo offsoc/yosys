@@ -1002,14 +1002,6 @@ ifeq ($(ENABLE_PYOSYS),1)
 endif
 endif
 
-# also others, but so long as it doesn't fail this is enough to know we tried
-docs/source/cmd/abc.rst: $(TARGETS) $(EXTRA_TARGETS)
-	$(Q) mkdir -p docs/source/cmd
-	$(Q) mkdir -p temp/docs/source/cmd
-	$(Q) cd temp && ./../$(PROGRAM_PREFIX)yosys -p 'help -write-rst-command-reference-manual'
-	$(Q) rsync -rc temp/docs/source/cmd docs/source
-	$(Q) rm -rf temp
-
 docs/source/generated/cmds.json: docs/source/generated $(TARGETS) $(EXTRA_TARGETS)
 	$(Q) ./$(PROGRAM_PREFIX)yosys -p 'help -dump-cmds-json $@'
 
