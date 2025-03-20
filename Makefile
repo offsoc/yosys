@@ -1090,7 +1090,7 @@ clean:
 	rm -f  tests/tools/cmp_tbdata
 	rm -f $(addsuffix /run-test.mk,$(MK_TEST_DIRS))
 	-$(MAKE) -C docs clean
-	rm -rf docs/source/cmd docs/util/__pycache__
+	rm -rf docs/util/__pycache__
 
 clean-abc:
 	$(MAKE) -C abc DEP= clean
