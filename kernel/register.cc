@@ -118,7 +118,10 @@ void Pass::post_execute(Pass::pre_post_exec_state_t state)
 
 void Pass::help()
 {
-	if (!formatted_help()) {
+	auto prettyHelp = PrettyHelp();
+	if (formatted_help()) {
+		prettyHelp.log_help();
+	} else {
 		log("\n");
 		log("No help message for command `%s'.\n", pass_name.c_str());
 		log("\n");
@@ -826,7 +829,7 @@ struct HelpPass : public Pass {
 			auto title = pass->short_help;
 			auto experimental_flag = pass->experimental_flag;
 
-			auto cmd_help = PrettyHelp(PrettyHelp::Mode::LISTING);
+			auto cmd_help = PrettyHelp();
 			auto has_pretty_help = pass->formatted_help();
 
 			if (!has_pretty_help) {
@@ -839,6 +842,8 @@ struct HelpPass : public Pass {
 
 				source_location null_source;
 				string current_buffer = "";
+				auto root_listing = cmd_help.get_root();
+				auto current_listing = root_listing;
 
 				// dump command help
 				std::ostringstream buf;
@@ -861,7 +866,8 @@ struct HelpPass : public Pass {
 						switch (current_state)
 						{
 						case PUState_signature:
-							cmd_help.usage(current_buffer, null_source);
+							root_listing->usage(current_buffer, null_source);
+							current_listing = root_listing;
 							current_state = PUState_none;
 							current_buffer = "";
 							break;
@@ -888,16 +894,16 @@ struct HelpPass : public Pass {
 
 					if (IsSignature && first_pos <= 4 && (blank_lines >= 2 || current_state == PUState_signature)) {
 						if (current_state == PUState_options || current_state == PUState_optionbody) {
-							cmd_help.codeblock(current_buffer, "none", null_source);
+							current_listing->codeblock(current_buffer, "none", null_source);
 							current_buffer = "";
-							cmd_help.close(2);
 						} else if (current_state == PUState_signature) {
-							cmd_help.usage(current_buffer, null_source);
+							root_listing->usage(current_buffer, null_source);
 							current_buffer = "";
 						} else if (current_state == PUState_none && !current_buffer.empty()) {
-							cmd_help.codeblock(current_buffer, "none", null_source);
+							current_listing->codeblock(current_buffer, "none", null_source);
 							current_buffer = "";
 						}
+						current_listing = root_listing;
 						current_state = PUState_signature;
 						def_strip_count = first_pos;
 						catch_verific = false;
@@ -905,15 +911,15 @@ struct HelpPass : public Pass {
 						def_strip_count = first_pos;
 						if (current_state == PUState_optionbody) {
 							if (!current_buffer.empty()) {
-								cmd_help.codeblock(current_buffer, "none", null_source);
+								current_listing->codeblock(current_buffer, "none", null_source);
 								current_buffer = "";
 							}
 							if (IsIndent) {
 								current_state = PUState_options;
-								cmd_help.close(1);
+								current_listing = root_listing->back();
 							} else {
 								current_state = PUState_none;
-								cmd_help.close(2);
+								current_listing = root_listing;
 							}
 						} else {
 							current_state = PUState_none;
@@ -922,16 +928,16 @@ struct HelpPass : public Pass {
 
 					if (IsDefinition && !catch_verific && current_state != PUState_signature) {
 						if (!current_buffer.empty()) {
-							cmd_help.codeblock(current_buffer, "none", null_source);
+							current_listing->codeblock(current_buffer, "none", null_source);
 							current_buffer = "";
 						}
 						if (current_state == PUState_options || current_state == PUState_optionbody) {
-							cmd_help.close(1);
+							current_listing = root_listing->back();
 						}  else {
-							cmd_help.open_optiongroup("", null_source);
+							current_listing = root_listing->open_optiongroup("", null_source);
 						}
 						current_state = PUState_options;
-						cmd_help.open_option(stripped_line, null_source);
+						current_listing = current_listing->open_option(stripped_line, null_source);
 						def_strip_count = first_pos;
 					} else {
 						if (current_state == PUState_options) {
@@ -952,7 +958,7 @@ struct HelpPass : public Pass {
 				}
 
 				if (!current_buffer.empty()) {
-					cmd_help.codeblock(current_buffer, "none", null_source);
+					current_listing->codeblock(current_buffer, "none", null_source);
 					current_buffer = "";
 				}
 			}
