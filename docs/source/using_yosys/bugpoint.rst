@@ -99,8 +99,9 @@ How do I use bugpoint?
     design.il`` to print only the error message(s) and use that (or a portion of
     that) as the ``<string>`` to search for
 
-- ``-modules``, ``-ports``, ``-cells``, and ``-processes`` will enable those
-  parts of the design to be removed (default is to allow removing all)
+- ``-modules``, ``-ports``, ``-cells``, ``-processes``, and ``-wires`` will
+  enable only those parts of the design to be removed (default is to allow
+  removing all)
 
   + use the ``bugpoint_keep`` attribute on objects you don't want to be
     removed, usually because you already know they are related to the failure
