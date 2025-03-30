@@ -24,6 +24,7 @@
 #include "kernel/celledges.h"
 #include "kernel/macc.h"
 #include "kernel/cost.h"
+#include "kernel/celltypes.h"
 #include <algorithm>
 
 USING_YOSYS_NAMESPACE
@@ -471,7 +472,7 @@ static void run_edges_test(RTLIL::Design *design, bool verbose)
 		log_error("SAT-based edge table does not match the database!\n");
 }
 
-static void run_eval_test(RTLIL::Design *design, bool verbose, bool nosat, std::string uut_name, std::ofstream &vlog_file)
+static void run_eval_test(RTLIL::Design *design, const CellType *ct, bool verbose, bool nosat, std::string uut_name, std::ofstream &vlog_file)
 {
 	log("Eval testing:%c", verbose ? '\n' : ' ');
 
@@ -530,6 +531,8 @@ static void run_eval_test(RTLIL::Design *design, bool verbose, bool nosat, std::
 		RTLIL::SigSpec out_sig, out_val;
 		std::string vlog_pattern_info;
 
+		std::map<RTLIL::IdString, RTLIL::Const> in_map;
+
 		for (auto port : gold_mod->ports)
 		{
 			RTLIL::Wire *gold_wire = gold_mod->wire(port);
@@ -559,6 +562,7 @@ static void run_eval_test(RTLIL::Design *design, bool verbose, bool nosat, std::
 
 			in_sig.append(gold_wire);
 			in_val.append(in_value);
+			in_map[port] = in_value;
 
 			gold_ce.set(gold_wire, in_value);
 			gate_ce.set(gate_wire, in_value);
@@ -625,6 +629,49 @@ static void run_eval_test(RTLIL::Design *design, bool verbose, bool nosat, std::
 
 		if (verbose)
 			log("EVAL:  %s\n", out_val.as_string().c_str());
+
+		if (ct != nullptr && ct->is_evaluable) {
+			auto *cell = gold_mod->cell(ID(UUT));
+			log_assert(cell != nullptr);
+			bool err = false;
+			Const result;
+
+			// Based on passes/sat/sim.cc
+			bool has_a, has_b, has_c, has_d, has_s, has_x, has_y;
+
+			has_a = cell->hasPort(ID::A);
+			has_b = cell->hasPort(ID::B);
+			has_c = cell->hasPort(ID::C);
+			has_d = cell->hasPort(ID::D);
+			has_s = cell->hasPort(ID::S);
+			has_x = cell->hasPort(ID::X);
+			has_y = cell->hasPort(ID::Y);
+
+			// Simple (A -> Y) and (A,B -> Y) cells
+			if (has_a && !has_c && !has_d && !has_s && !has_x && has_y)
+				result = CellTypes::eval(cell, in_map[ID::A], in_map[ID::B], &err);
+			// (A,B,C -> Y) cells
+			else if (has_a && has_b && has_c && !has_d && !has_s && !has_x && has_y)
+				result = CellTypes::eval(cell, in_map[ID::A], in_map[ID::B], in_map[ID::B], &err);
+			// (A,S -> Y) cells
+			else if (has_a && !has_b && !has_c && !has_d && has_s && !has_x && has_y)
+				result = CellTypes::eval(cell, in_map[ID::A], in_map[ID::S], &err);
+			// (A,B,S -> Y) cells
+			else if (has_a && has_b && !has_c && !has_d && has_s && !has_x && has_y)
+				result = CellTypes::eval(cell, in_map[ID::A], in_map[ID::B], in_map[ID::S], &err);
+			// anything else
+			else
+				log_error("Unable to handle ports for ID::%s\n", id2cstr(ct->type));
+
+			if (err)
+				log_error("CellTypes::eval(ID::%s) returned error\n", id2cstr(ct->type));
+
+			if (result != out_val.as_const())
+				log_error("CellTypes/ConstEval mismatch for ID::%s, %s != %s\n", id2cstr(ct->type), log_const(result), log_signal(out_val));
+
+			if (verbose)
+				log("eval: %s\n", result.as_string().c_str());
+		}
 
 		if (!nosat)
 		{
@@ -756,6 +803,9 @@ struct TestCellPass : public Pass {
 		log("    -noeval\n");
 		log("        do not check const-eval models\n");
 		log("\n");
+		log("    -nocteval\n");
+		log("        do not check celltype-eval models\n");
+		log("\n");
 		log("    -noopt\n");
 		log("        do not opt tecchmapped design\n");
 		log("\n");
@@ -773,6 +823,18 @@ struct TestCellPass : public Pass {
 		log("        check if the estimated cell cost is a valid upper bound for\n");
 		log("        the techmapped cell count \n");
 		log("\n");
+		log("    test_cell -list all\n");
+		log("\n");
+		log("List all cell types supported by test_cell.\n");
+		log("\n");
+		log("    test_cell -list evaluable\n");
+		log("\n");
+		log("List all cell types marked evaluable.\n");
+		log("\n");
+		log("    test_cell -list missing\n");
+		log("\n");
+		log("List all cell types marked evaluable but not supported by test_cell.\n");
+		log("\n");
 	}
 	void execute(std::vector<std::string> args, RTLIL::Design*) override
 	{
@@ -786,9 +848,14 @@ struct TestCellPass : public Pass {
 		bool constmode = false;
 		bool nosat = false;
 		bool noeval = false;
+		bool nocteval = false;
 		bool noopt = false;
 		bool edges = false;
 		bool check_cost = false;
+		bool list = false;
+		bool list_all = false;
+		bool list_evaluable = false;
+		bool list_missing = false;
 
 		int argidx;
 		for (argidx = 1; argidx < GetSize(args); argidx++)
@@ -842,6 +909,10 @@ struct TestCellPass : public Pass {
 				noeval = true;
 				continue;
 			}
+			if (args[argidx] == "-nocteval") {
+				nocteval = true;
+				continue;
+			}
 			if (args[argidx] == "-noopt") {
 				noopt = true;
 				continue;
@@ -868,12 +939,20 @@ struct TestCellPass : public Pass {
 				check_cost = true;
 				continue;
 			}
+			if (args[argidx] == "-list" && argidx+1 < GetSize(args)) {
+				list = true;
+				argidx++;
+				if (args[argidx].compare("all") == 0)
+					list_all = true;
+				else if (args[argidx].compare("evaluable") == 0)
+					list_evaluable = true;
+				else if (args[argidx].compare("missing") == 0)
+					list_missing = true;
+				else
+					log_cmd_error("Unknown list type '%s'.\n", args[argidx].c_str());
+				continue;
+			}
 			break;
-		}
-
-		if (xorshift32_state == 0) {
-			xorshift32_state = time(NULL) & 0x7fffffff;
-			log("Rng seed value: %d\n", int(xorshift32_state));
 		}
 
 		std::map<IdString, std::string> cell_types;
@@ -940,6 +1019,33 @@ struct TestCellPass : public Pass {
 		cell_types[ID($macc)] = "*";
 		cell_types[ID($fa)] = "*";
 
+		if (list_all) {
+			log("test_cell supports the following cell types:\n");
+			for (auto it : cell_types)
+				log("%s\n", id2cstr(it.first));
+		}
+
+		if (list_evaluable) {
+			log("cell types marked evaluable:\n");
+			for (auto it : yosys_celltypes.cell_types)
+				if (it.second.is_evaluable)
+					log("%s\n", id2cstr(it.first));
+		}
+
+		if (list_missing) {
+			log("test_cell missing support for evaluable cell types:\n");
+			for (auto it : yosys_celltypes.cell_types)
+				if (it.second.is_evaluable && cell_types.count(it.first) == 0)
+					log("%s\n", id2cstr(it.first));
+		}
+
+		if (list) return;
+
+		if (xorshift32_state == 0) {
+			xorshift32_state = time(NULL) & 0x7fffffff;
+			log("Rng seed value: %d\n", int(xorshift32_state));
+		}
+
 		for (; argidx < GetSize(args); argidx++)
 		{
 			if (args[argidx].rfind("-", 0) == 0)
@@ -998,6 +1104,14 @@ struct TestCellPass : public Pass {
 			int worst_abs = 0;
 			// How many times is it bigger than estimated?
 			float worst_rel = 0.0;
+			// Get cell type for cell (if possible)
+			const CellType *ct = nullptr;
+			if (!nocteval) {
+				if (yosys_celltypes.cell_known(cell_type))
+					ct = yosys_celltypes.get_cell(cell_type);
+				else if (cell_type != ID(rtlil))
+					log_warning("%s does not have an internal cell type!\n", id2cstr(cell_type));
+			}
 			for (int i = 0; i < num_iter; i++)
 			{
 				Cell* uut = nullptr;
@@ -1031,7 +1145,7 @@ struct TestCellPass : public Pass {
 						uut_names.push_back(uut_name);
 					}
 					if (!noeval)
-						run_eval_test(design, verbose, nosat, uut_name, vlog_file);
+						run_eval_test(design, ct, verbose, nosat, uut_name, vlog_file);
 					if (check_cost && uut) {
 						Pass::call(design, "select gate");
 						int num_cells = 0;
