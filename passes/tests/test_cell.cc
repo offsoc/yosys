@@ -429,17 +429,20 @@ static RTLIL::Cell* create_gold_module(RTLIL::Design *design, RTLIL::IdString ce
 		cell->setPort(ID::Y, wire);
 	}
 
-	if (cell_type == ID($bwmux))
+	if (cell_type.in(ID($bwmux), ID($bweqx)))
 	{
 		int a_size = GetSize(cell->getPort(ID::A));
 		wire = module->addWire(ID::B);
 		wire->width = a_size;
 		wire->port_output = true;
 		cell->setPort(ID::B, wire);
-		wire = module->addWire(ID::S);
-		wire->width = a_size;
-		wire->port_output = true;
-		cell->setPort(ID::S, wire);
+		if (cell_type == ID($bwmux))
+		{
+			wire = module->addWire(ID::S);
+			wire->width = a_size;
+			wire->port_output = true;
+			cell->setPort(ID::S, wire);
+		}
 		wire = module->addWire(ID::Y);
 		wire->width = a_size;
 		wire->port_output = true;
@@ -1112,6 +1115,8 @@ struct TestCellPass : public Pass {
 			cell_types[ID($pmux)] = "*";
 		if (noeval)
 			cell_types[ID($bwmux)] = "A";
+		if (nosat && noeval)
+			cell_types[ID($bweqx)] = "A";
 
 		cell_types[ID($slice)] = "A";
 		cell_types[ID($concat)] = "AB";
