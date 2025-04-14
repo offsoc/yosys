@@ -318,7 +318,12 @@ void RTLIL_BACKEND::dump_module(std::ostream &f, std::string indent, RTLIL::Modu
 				std::swap(lhs, rhs);
 			}
 		}
-		std::sort(module->connections_.begin(), module->connections_.end());
+		std::sort(module->connections_.begin(), module->connections_.end(), [](const auto &a, const auto &b) {
+			if (std::string(log_signal(a.first)) != std::string(log_signal(b.first))) {
+				return std::string(log_signal(a.first)) < std::string(log_signal(b.first));
+			}
+			return std::string(log_signal(a.second)) < std::string(log_signal(b.second));
+		});
 	}
 
 	if (print_header)
