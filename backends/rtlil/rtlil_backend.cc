@@ -313,12 +313,12 @@ void RTLIL_BACKEND::dump_module(std::ostream &f, std::string indent, RTLIL::Modu
 		module->cloneInto(new_module);
 		module = new_module;
 		module->sort();
-		std::sort(module->connections_.begin(), module->connections_.end());
 		for (auto& [lhs, rhs] : module->connections_) {
 			if (std::string(log_signal(lhs)) < std::string(log_signal(rhs))) {
 				std::swap(lhs, rhs);
 			}
 		}
+		std::sort(module->connections_.begin(), module->connections_.end());
 	}
 
 	if (print_header)
